@@ -7,14 +7,15 @@
  *   2. 负数金额入参的容错（stats 层不抛异常，行为可预期）
  *   3. formatYuan 对 1 分 / 99 分 / 负数 / 0 / 非整数分的表现
  *   4. 极大金额（99999999999 分）求和仍落在安全整数范围内且精确
- *   5. getAdvice([]) 返回空数组不抛异常
+ *   5. 洞察引擎对脏入参的容错（v2：替代 v1 固定建议规则）
  *   6. speech.js 纯解析函数在 Node 下可独立运行（金额提取/分类关键词/异常入参）
- *   7. store.js 在无 localStorage 环境（Node）下 loadAll 不崩溃、返回空状态
+ *   7. store.js v2 在无 localStorage 环境（Node）下各读写函数不崩溃、走失败/空态路径
  */
 'use strict';
 
 const assert = require('assert');
 const stats = require('../js/stats.js');
+const insights = require('../js/insights.js');
 
 let passed = 0;
 function eq(actual, expected, msg) {
@@ -41,14 +42,14 @@ eq(stats.sumAccounts([null, {}, { balance_cents: 500 }]), 500,
 noThrow(function () { stats.summarizeByCategory([null, undefined]); }, 'summarizeByCategory 对 null 元素不抛异常');
 
 // ---------- 2. 负数金额入参的容错（stats 层行为记录） ----------
-// 需求 6.2 规定 amount_cents >= 1，负数应由 store.js normalizeBill 拦截（store.js:77）；
+// 需求 6.2 规定 amount_cents >= 1，负数应由 store.js normalizeBill 拦截；
 // stats 层不负责拦截，但必须不抛异常、行为可预期（负数按负数累加）。
 eq(stats.sumAmounts([{ amount_cents: -500 }, { amount_cents: 800 }]), 300,
   'stats 层负数金额按负数累加，不抛异常（拦截责任在 store 层）');
-noThrow(function () { stats.getAdvice([{ amount_cents: -100, category: '餐饮', tag: '冲动' }]); },
-  '全负数账单 getAdvice 不抛异常');
-eq(stats.getAdvice([{ amount_cents: -100, category: '餐饮', tag: '冲动' }]).length, 0,
-  '全负数账单总额 <= 0 时 getAdvice 返回空数组');
+noThrow(function () { insights.generateInsights([{ amount_cents: -100, category: '餐饮', tag: '冲动' }], [], new Date(2026, 9, 22)); },
+  '全负数账单 generateInsights 不抛异常');
+eq(insights.generateInsights([{ amount_cents: -100, category: '餐饮', tag: '冲动' }], [], new Date(2026, 9, 22)).length, 1,
+  '全负数账单当月笔数 < 3 → 走引导话术路径（v2 洞察引擎替代 v1 建议）');
 
 // ---------- 3. formatYuan 边界 ----------
 eq(stats.formatYuan(1), '0.01', '1 分 → "0.01"');
@@ -70,9 +71,14 @@ eq(stats.sumAmounts(manyBig), 80000 * BIG,
   '8 万笔极大金额求和仍在安全整数范围内且精确');
 ok(Number.MAX_SAFE_INTEGER >= 80000 * BIG, '8 万笔极大金额之和确在 Number.MAX_SAFE_INTEGER 之下');
 
-// ---------- 5. getAdvice([]) ----------
-const emptyAdvice = stats.getAdvice([]);
-ok(Array.isArray(emptyAdvice) && emptyAdvice.length === 0, 'getAdvice([]) 返回空数组不抛异常');
+// ---------- 5. 洞察引擎对脏入参的容错（v2） ----------
+const NOW = new Date(2026, 9, 22);
+noThrow(function () { insights.generateInsights([null, undefined], null, NOW); },
+  'generateInsights 对 null/undefined 账单元素不抛异常');
+noThrow(function () { insights.generateInsights([], null, undefined); },
+  'generateInsights 对 null 账户与非 Date 时间入参不抛异常（now 缺省取当前时间）');
+let dirtyOut = insights.generateInsights([null, { date: '2026-10-01', amount_cents: 100, category: '盲盒', tag: '冲动' }], null, NOW);
+ok(Array.isArray(dirtyOut) && dirtyOut.length === 1, '脏入参走引导话术路径，输出数组结构合法');
 
 // ---------- 6. speech.js 纯解析函数（Node 下独立可跑） ----------
 // speech.js / store.js 的 UMD 守卫在浏览器挂 window，在 Node 下挂在 module.exports.Ledger* 属性上
@@ -98,12 +104,27 @@ eq(parsed.note, '奶茶9块', 'parseTranscript 备注为原始识别文本');
 ok(!('amount_cents' in parsed) && !('bills' in parsed),
   'parseTranscript 返回结构中无任何落库字段（T6：只预填，绝不产生账单）');
 
-// ---------- 7. store.js 在无 localStorage 环境（Node）下的健壮性 ----------
-let loaded = null;
-noThrow(function () { loaded = store.loadAll(); }, '无 localStorage 环境 loadAll 不崩溃');
-ok(loaded && Array.isArray(loaded.bills) && Array.isArray(loaded.accounts) &&
-   loaded.bills.length === 0 && loaded.accounts.length === 0,
-  '无 localStorage 环境下 loadAll 兜底返回空状态');
-eq(store.saveBills([{ id: 'x' }]), false, '无 localStorage 环境 saveBills 返回 false（配额/写入失败同路径）');
+// ---------- 7. store.js v2 在无 localStorage 环境（Node）下的健壮性 ----------
+// 无存储环境时所有读取走空态、所有写入返回 false（与配额失败同路径），绝不抛异常
+noThrow(function () { store.ensureSchemaVersion(); }, '无 localStorage 环境 ensureSchemaVersion 不崩溃');
+let users = null;
+noThrow(function () { users = store.loadUsers(); }, '无 localStorage 环境 loadUsers 不崩溃');
+ok(Array.isArray(users) && users.length === 0, '无 localStorage 环境 loadUsers 兜底返回空表');
+eq(store.saveUsers([{ username: 'x', role: '学生' }]), false, '无 localStorage 环境 saveUsers 返回 false（写入失败同路径）');
+let userBills = null;
+noThrow(function () { userBills = store.loadUserBills('ghost'); }, '无 localStorage 环境 loadUserBills 不崩溃');
+ok(Array.isArray(userBills) && userBills.length === 0, '无 localStorage 环境 loadUserBills 兜底返回空数组');
+eq(store.saveUserBills('ghost', []), false, '无 localStorage 环境 saveUserBills 返回 false');
+eq(store.saveUserAccounts('ghost', []), false, '无 localStorage 环境 saveUserAccounts 返回 false');
+eq(store.readSession(), null, '无 sessionStorage 环境 readSession 兜底返回 null');
+eq(store.writeSession({ username: 'x', role: '学生' }), false, '无 sessionStorage 环境 writeSession 返回 false');
+noThrow(function () { store.clearSession(); }, '无 sessionStorage 环境 clearSession 不崩溃');
+let v1raw = null;
+noThrow(function () { v1raw = store.getV1Raw(); }, '无 localStorage 环境 getV1Raw 不崩溃');
+ok(v1raw && v1raw.bills === null && v1raw.accounts === null, '无 localStorage 环境 getV1Raw 两键均为 null（无旧数据）');
+eq(store.migrateV1ToUser('ghost', [], []), false, '无 localStorage 环境 migrateV1ToUser 写入失败返回 false（旧键保留路径）');
+// per-user 键拼装唯一入口
+eq(store.userKey('linxiao', store.USER_KEY_KINDS.BILLS), 'ledger_v2:linxiao:bills', 'userKey 统一拼装 per-user 键名');
+eq(store.userKey('linmama', store.USER_KEY_KINDS.ACCOUNTS), 'ledger_v2:linmama:accounts', 'userKey 账户键名拼装正确');
 
 console.log(passed + ' assertions passed');

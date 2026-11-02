@@ -1,11 +1,13 @@
 /**
- * stats.js —— 统计计算与建议规则（纯函数模块）
+ * stats.js —— 统计计算（纯函数模块）
  *
- * 设计约束（需求书 5.2）：
+ * 设计约束（v1 需求书 5.2 + v2 增量需求书 5.1/5.4③）：
  * - 不碰 DOM、不碰 localStorage，输入数据、输出结果
  * - UMD 双环境守卫：浏览器挂到 window.LedgerStats；Node 通过 module.exports 供测试 require
  * - 金额一律以"分"为单位的整数（*_cents），求和先整数相加、展示时再转元
  * - 枚举常量统一定义在此，全项目禁止散落魔法字符串
+ * - v2 变更：v1 固定 3 条建议规则（getAdvice）整体废弃，由 insights.js 洞察引擎替代；
+ *   本文件补充环比等洞察所需的统计纯函数（previousMonthPrefix / momChangeRatio）
  */
 (function (root, factory) {
   if (typeof module !== 'undefined' && module.exports) {
@@ -23,16 +25,6 @@
   var TAGS = ['刚性', '冲动'];
   var TAG_RIGID = '刚性';
   var TAG_IMPULSIVE = '冲动';
-
-  /** 建议规则阈值（命名常量，规则与文案一一对应，测试直接引用） */
-  var IMPULSIVE_RATIO_THRESHOLD = 0.4;  // 冲动消费占比 ≥ 40% → 冲动类建议
-  var FOOD_RATIO_THRESHOLD = 0.5;       // 餐饮占比 ≥ 50% → 餐饮类建议
-  var FUN_RATIO_THRESHOLD = 0.25;       // 娱乐占比 ≥ 25% → 娱乐类建议
-
-  var ADVICE_BALANCED = '本月消费结构均衡，各类开销都在合理范围内，继续保持理性消费的好习惯。';
-  var ADVICE_IMPULSIVE = '冲动消费占比 {pct}%（阈值 40%），本月花钱容易上头：奶茶、网购这类"想要"的开销砍一半，省下的钱够吃一周食堂。';
-  var ADVICE_FOOD = '餐饮占比 {pct}%（阈值 50%），吃饭花得偏多：多在食堂吃、少点外卖，把每周下馆子的次数减一次。';
-  var ADVICE_FUN = '娱乐占比 {pct}%（阈值 25%），娱乐开销偏高：给娱乐设一个每周上限，先把学习和日用保障好。';
 
   /** 数字补两位，用于 YYYY-MM 拼接 */
   function pad2(n) {
@@ -81,6 +73,22 @@
    */
   function currentMonthPrefix(now) {
     return now.getFullYear() + '-' + pad2(now.getMonth() + 1);
+  }
+
+  /**
+   * 上一个月的 "YYYY-MM" 前缀（v2 新增：环比对比所需，跨年正确回退）
+   * @param {Date} now
+   * @returns {string} 形如 "2026-09"；1 月返回上一年 "YYYY-12"
+   */
+  function previousMonthPrefix(now) {
+    var year = now.getFullYear();
+    var month = now.getMonth(); // 0-based
+    month -= 1;
+    if (month < 0) {
+      month = 11;
+      year -= 1;
+    }
+    return year + '-' + pad2(month + 1);
   }
 
   /**
@@ -162,40 +170,20 @@
   }
 
   /**
-   * 消费分析与省钱建议（核心作业点，规则全部写死、阈值用命名常量）
-   * 多条规则同时命中时按优先级输出多条：冲动 > 餐饮 > 娱乐；
-   * 一条都不命中时输出均衡话术；无账单（总额为 0）时输出空数组。
-   * @param {Array} bills （调用方保证已按当月过滤）
-   * @returns {string[]} 建议文案列表
+   * 环比变化率（v2 新增：洞察引擎对比类模板所需）。
+   * |本期 - 上期| / 上期；上期 <= 0 或非有限数时返回 0（无法比较则视为无变化）。
+   * @param {number} currentCents 本期金额（分）
+   * @param {number} previousCents 上期金额（分）
+   * @returns {number} 非负变化率（0~∞）
    */
-  function getAdvice(bills) {
-    var total = sumAmounts(bills);
-    if (total <= 0) {
-      return [];
+  function momChangeRatio(currentCents, previousCents) {
+    if (typeof previousCents !== 'number' || !isFinite(previousCents) || previousCents <= 0) {
+      return 0;
     }
-    var ratios = computeRatios(bills);
-    var result = [];
-    var pct = function (r) { return (r * 100).toFixed(1); };
-
-    // 规则一（优先级最高）：冲动消费占比
-    if (ratios.impulsive_ratio >= IMPULSIVE_RATIO_THRESHOLD) {
-      result.push(ADVICE_IMPULSIVE.replace('{pct}', pct(ratios.impulsive_ratio)));
+    if (typeof currentCents !== 'number' || !isFinite(currentCents)) {
+      return 0;
     }
-    // 规则二：餐饮占比显著偏高
-    var foodRatio = ratios.by_category['餐饮'].ratio;
-    if (foodRatio >= FOOD_RATIO_THRESHOLD) {
-      result.push(ADVICE_FOOD.replace('{pct}', pct(foodRatio)));
-    }
-    // 规则三：娱乐占比偏高
-    var funRatio = ratios.by_category['娱乐'].ratio;
-    if (funRatio >= FUN_RATIO_THRESHOLD) {
-      result.push(ADVICE_FUN.replace('{pct}', pct(funRatio)));
-    }
-    // 一条都不命中 → 正常话术
-    if (result.length === 0) {
-      result.push(ADVICE_BALANCED);
-    }
-    return result;
+    return Math.abs(currentCents - previousCents) / previousCents;
   }
 
   /**
@@ -220,17 +208,15 @@
     TAGS: TAGS,
     TAG_RIGID: TAG_RIGID,
     TAG_IMPULSIVE: TAG_IMPULSIVE,
-    IMPULSIVE_RATIO_THRESHOLD: IMPULSIVE_RATIO_THRESHOLD,
-    FOOD_RATIO_THRESHOLD: FOOD_RATIO_THRESHOLD,
-    FUN_RATIO_THRESHOLD: FUN_RATIO_THRESHOLD,
     sumAmounts: sumAmounts,
     filterByMonth: filterByMonth,
     filterByCurrentMonth: filterByCurrentMonth,
     currentMonthPrefix: currentMonthPrefix,
+    previousMonthPrefix: previousMonthPrefix,
     summarizeByCategory: summarizeByCategory,
     computeRatios: computeRatios,
     formatYuan: formatYuan,
-    getAdvice: getAdvice,
+    momChangeRatio: momChangeRatio,
     sumAccounts: sumAccounts
   };
 });

@@ -4,7 +4,9 @@
  * 运行：node test/stats.test.js
  * 直接 require UMD 导出的 js/stats.js（见需求书 8.1）。
  * 必测边界：金额 0.01 元（最小分）、空账单列表、全部冲动标签、未知分类容错、
- * 账户求和含 0 余额账户；另补：当月过滤边界、分精度、建议阈值两侧。
+ * 账户求和含 0 余额账户；另补：当月过滤边界、分精度、上月月份前缀、环比变化率。
+ * v2 变更：v1 固定建议规则（getAdvice）整体废弃 → 对应死用例删除，
+ * 其"冲动占比阈值判定"等能力由 test/insights.test.js 的洞察引擎用例承接。
  */
 'use strict';
 
@@ -30,7 +32,6 @@ const NOW = new Date(2026, 9, 22, 12, 0, 0);
 eq(stats.sumAmounts([]), 0, '空账单列表总额为 0');
 eq(stats.computeRatios([]).total_cents, 0, '空账单列表 computeRatios 总额为 0');
 eq(stats.computeRatios([]).impulsive_ratio, 0, '空账单列表冲动占比为 0');
-eq(stats.getAdvice([]).length, 0, '空账单列表不输出任何建议');
 eq(stats.sumAccounts([]), 0, '空账户列表总资产为 0');
 
 // ---------- 2. 金额 0.01 元（最小分）----------
@@ -51,8 +52,6 @@ const allImpulsive = [
 const impRatios = stats.computeRatios(allImpulsive);
 eq(impRatios.impulsive_ratio, 1, '全部冲动标签时冲动占比为 1');
 eq(impRatios.impulsive_cents, 100, '全部冲动标签时冲动金额为 100 分');
-const impAdvice = stats.getAdvice(allImpulsive);
-ok(impAdvice.length >= 1 && impAdvice[0].indexOf('冲动') !== -1, '全部冲动标签输出含"冲动"的建议');
 
 // ---------- 4. 含未知分类值的容错 ----------
 const unknownCatBills = [
@@ -65,7 +64,6 @@ eq(unknownSums['餐饮'], 50, '已知分类正常汇总');
 eq(stats.sumAmounts(unknownCatBills), 150, '未知分类金额不丢，总额 150 分');
 const unknownRatios = stats.computeRatios(unknownCatBills);
 eq(unknownRatios.total_cents, 150, '未知分类不导致 computeRatios 总额错误');
-ok(Array.isArray(stats.getAdvice(unknownCatBills)), '未知分类不导致建议函数报错');
 // 未知分类账单 tag 异常时也不崩（tag 非冲动 → 不计入冲动金额）
 const weirdTag = [{ id: 'b1', date: '2026-10-01', amount_cents: 10, category: '餐饮', tag: '未知标签', created_at: 1 }];
 eq(stats.computeRatios(weirdTag).impulsive_cents, 0, '未知 tag 值容错：不计入冲动金额');
@@ -101,78 +99,22 @@ const tinyBills = [
 eq(stats.sumAmounts(tinyBills), 30, '整数分求和 10 + 20 = 30 分（无浮点误差）');
 eq(stats.formatYuan(stats.sumAmounts(tinyBills)), '0.30', '30 分展示为 "0.30" 而非 0.30000000000000004');
 
-// ---------- 8. 冲动阈值两侧：0.40 命中 / 0.39 未命中 ----------
-// 总额恒为 100 分，冲动金额分别取 40 / 39（分类避开餐饮、娱乐，排除其他规则干扰）
-const impHit = [
-  { amount_cents: 40, category: '交通', tag: '冲动', date: '2026-10-01' },
-  { amount_cents: 30, category: '日用', tag: '刚性', date: '2026-10-02' },
-  { amount_cents: 30, category: '其他', tag: '刚性', date: '2026-10-03' }
-];
-const impMiss = [
-  { amount_cents: 39, category: '交通', tag: '冲动', date: '2026-10-01' },
-  { amount_cents: 31, category: '日用', tag: '刚性', date: '2026-10-02' },
-  { amount_cents: 30, category: '其他', tag: '刚性', date: '2026-10-03' }
-];
-ok(stats.getAdvice(impHit).some(function (a) { return a.indexOf('冲动') !== -1; }),
-  '冲动占比恰好 40%（= 阈值）输出冲动建议');
-ok(!stats.getAdvice(impMiss).some(function (a) { return a.indexOf('冲动') !== -1; }),
-  '冲动占比 39%（< 阈值）不输出冲动建议');
-
-// ---------- 9. 餐饮阈值两侧：0.50 命中 / 0.49 未命中 ----------
-const foodHit = [
-  { amount_cents: 50, category: '餐饮', tag: '刚性', date: '2026-10-01' },
-  { amount_cents: 50, category: '交通', tag: '刚性', date: '2026-10-02' }
-];
-const foodMiss = [
-  { amount_cents: 49, category: '餐饮', tag: '刚性', date: '2026-10-01' },
-  { amount_cents: 51, category: '交通', tag: '刚性', date: '2026-10-02' }
-];
-ok(stats.getAdvice(foodHit).some(function (a) { return a.indexOf('餐饮') !== -1; }),
-  '餐饮占比恰好 50%（= 阈值）输出餐饮建议');
-ok(!stats.getAdvice(foodMiss).some(function (a) { return a.indexOf('餐饮') !== -1; }),
-  '餐饮占比 49%（< 阈值）不输出餐饮建议');
-
-// ---------- 10. 娱乐阈值两侧：0.25 命中 / 0.24 未命中 ----------
-const funHit = [
-  { amount_cents: 25, category: '娱乐', tag: '刚性', date: '2026-10-01' },
-  { amount_cents: 75, category: '交通', tag: '刚性', date: '2026-10-02' }
-];
-const funMiss = [
-  { amount_cents: 24, category: '娱乐', tag: '刚性', date: '2026-10-01' },
-  { amount_cents: 76, category: '交通', tag: '刚性', date: '2026-10-02' }
-];
-ok(stats.getAdvice(funHit).some(function (a) { return a.indexOf('娱乐') !== -1; }),
-  '娱乐占比恰好 25%（= 阈值）输出娱乐建议');
-ok(!stats.getAdvice(funMiss).some(function (a) { return a.indexOf('娱乐') !== -1; }),
-  '娱乐占比 24%（< 阈值）不输出娱乐建议');
-
-// ---------- 11. 一条不命中 → 均衡话术 ----------
-const balancedBills = [
-  { amount_cents: 40, category: '餐饮', tag: '刚性', date: '2026-10-01' },
-  { amount_cents: 30, category: '交通', tag: '刚性', date: '2026-10-02' },
-  { amount_cents: 30, category: '日用', tag: '刚性', date: '2026-10-03' }
-];
-const balAdvice = stats.getAdvice(balancedBills);
-eq(balAdvice.length, 1, '无规则命中时只输出一条话术');
-ok(balAdvice[0].indexOf('均衡') !== -1, '无规则命中时输出"消费结构均衡"话术');
-
-// ---------- 12. 多规则同时命中 → 按优先级输出多条 ----------
-// 餐饮 50 分（冲动 40 + 刚性 10）+ 日用 50 分：冲动占比 0.4、餐饮占比 0.5 同时命中
-const multiHit = [
-  { amount_cents: 40, category: '餐饮', tag: '冲动', date: '2026-10-01' },
-  { amount_cents: 10, category: '餐饮', tag: '刚性', date: '2026-10-02' },
-  { amount_cents: 50, category: '日用', tag: '刚性', date: '2026-10-03' }
-];
-const multiAdvice = stats.getAdvice(multiHit);
-eq(multiAdvice.length, 2, '两条规则命中时输出两条建议');
-ok(multiAdvice[0].indexOf('冲动') !== -1, '优先级 1：冲动建议在前');
-ok(multiAdvice[1].indexOf('餐饮') !== -1, '优先级 2：餐饮建议在后');
-
-// ---------- 13. 常量导出与枚举完整性 ----------
+// ---------- 8. 枚举与常量导出完整性 ----------
 eq(stats.CATEGORIES.length, 6, '分类枚举共 6 值');
 eq(stats.TAGS.length, 2, '标签枚举共 2 值');
-eq(stats.IMPULSIVE_RATIO_THRESHOLD, 0.4, '冲动阈值为命名常量 0.4');
-eq(stats.FOOD_RATIO_THRESHOLD, 0.5, '餐饮阈值为命名常量 0.5');
-eq(stats.FUN_RATIO_THRESHOLD, 0.25, '娱乐阈值为命名常量 0.25');
+eq(typeof stats.getAdvice, 'undefined', 'v1 固定建议规则 getAdvice 已整体移除（由洞察引擎替代）');
+
+// ---------- 9. 上月月份前缀（v2 新增：环比对比所需）----------
+eq(stats.previousMonthPrefix(NOW), '2026-09', '上月月份前缀计算正确');
+eq(stats.previousMonthPrefix(new Date(2026, 0, 15)), '2025-12', '1 月的上月正确回退到上一年 12 月');
+eq(stats.previousMonthPrefix(new Date(2026, 2, 1)), '2026-02', '3 月的上月为 2 月');
+eq(stats.previousMonthPrefix(new Date(2025, 11, 31)), '2025-11', '12 月的上月为 11 月（同年）');
+
+// ---------- 10. 环比变化率（v2 新增：洞察引擎对比类所需）----------
+eq(stats.momChangeRatio(200, 100), 1, '环比变化率 200 vs 100 = +100%');
+eq(stats.momChangeRatio(100, 200), 0.5, '环比变化率 100 vs 200 = 50%（取绝对值）');
+eq(stats.momChangeRatio(100, 100), 0, '金额持平环比变化率为 0');
+eq(stats.momChangeRatio(100, 0), 0, '上期为 0 无法比较，返回 0（不抛异常）');
+eq(stats.momChangeRatio(0, 100), 1, '本期为 0、上期 100 → 降幅 100%');
 
 console.log(passed + ' assertions passed');

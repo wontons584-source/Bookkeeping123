@@ -310,3 +310,72 @@ button:hover {
   text-align: center;
   padding: 12px;
 }
+
+/* ===== v2 新增样式 ===== */
+
+/* 视图头部（欢迎/家长视图标题 + 退出登录） */
+.view-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.view-head h2 {
+  border-left: 4px solid #1e3a8a;
+  padding-left: 8px;
+  font-size: 18px;
+}
+
+/* 登录 / 注册页 */
+.auth-card {
+  max-width: 560px;
+  margin: 24px auto;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.auth-tabs button.active {
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #fff;
+}
+
+/* 邀请码展示 */
+.invite-code {
+  font-size: 20px;
+  letter-spacing: 4px;
+  color: #b91c1c;
+}
+
+#invite-section p {
+  font-size: 14px;
+  margin: 6px 0;
+}
+
+#invite-section button {
+  margin-right: 8px;
+}
+
+/* 智能分类推荐卡（T22–T24：只动表单，永不直接落库） */
+.recommend-card {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.recommend-card button {
+  margin-left: 6px;
+  font-size: 13px;
+  padding: 3px 10px;
+}

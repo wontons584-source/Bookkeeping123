@@ -9,110 +9,28 @@
 <body>
   <header class="site-header">
     <h1>大学生生活费记账分析系统</h1>
-    <p class="site-sub">数据只存在本机浏览器，无需注册登录</p>
+    <p class="site-sub">注册登录后使用 · 学生记账分析 / 家长只读总览 · 数据只存本机浏览器，零网络请求</p>
   </header>
 
-  <main>
-    <!-- 一、录入区 -->
-    <section class="card" id="section-input">
-      <h2>一、录入账单</h2>
-      <form id="bill-form" novalidate>
-        <div class="form-row">
-          <label for="bill-date">日期</label>
-          <input type="date" id="bill-date" required />
-        </div>
-        <div class="form-row">
-          <label for="bill-amount">金额（元）</label>
-          <input type="number" id="bill-amount" step="0.01" min="0.01" placeholder="例如 12.50" required />
-        </div>
-        <div class="form-row">
-          <label for="bill-merchant">商户（可空）</label>
-          <input type="text" id="bill-merchant" maxlength="20" placeholder="例如 蜜雪冰城" />
-        </div>
-        <div class="form-row">
-          <label for="bill-category">分类</label>
-          <select id="bill-category" required></select>
-        </div>
-        <div class="form-row">
-          <span class="label-text">标签（必选）</span>
-          <label class="radio-label"><input type="radio" name="bill-tag" value="刚性" /> 刚性</label>
-          <label class="radio-label"><input type="radio" name="bill-tag" value="冲动" /> 冲动</label>
-        </div>
-        <div class="form-row">
-          <label for="bill-note">备注（可空）</label>
-          <input type="text" id="bill-note" maxlength="50" placeholder="例如 下午加单奶茶" />
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">保存账单</button>
-          <button type="button" id="speech-btn">🎙 语音记账</button>
-          <button type="button" id="ocr-btn">📷 截图识别（OCR）</button>
-        </div>
-        <p class="tip error" id="form-error" style="display:none;"></p>
-        <p class="tip info" id="speech-tip" style="display:none;"></p>
-        <p class="tip info" id="ocr-tip" style="display:none;"></p>
-      </form>
-    </section>
-
-    <!-- 二、账单列表 -->
-    <section class="card" id="section-list">
-      <h2>二、账单列表</h2>
-      <p class="list-total" id="list-total"></p>
-      <ul id="bill-list" class="bill-list"></ul>
-    </section>
-
-    <!-- 三、本月统计（饼图 + 消费分析） -->
-    <section class="card" id="section-stats">
-      <h2>三、本月统计</h2>
-      <p class="scope-note">统计范围：本月（当前自然月）。历史月份账单保留在列表中，但不参与统计。</p>
-      <div class="stats-grid">
-        <div class="stats-left">
-          <h3>支出分类饼图</h3>
-          <p class="month-total">本月支出合计：<strong id="month-total"></strong></p>
-          <div class="pie-wrap">
-            <canvas id="pie-chart" width="320" height="320"></canvas>
-            <p class="empty" id="pie-empty" style="display:none;">本月暂无账单，饼图将在记账后自动生成。</p>
-          </div>
-        </div>
-        <div class="stats-right">
-          <h3>消费分析与省钱建议</h3>
-          <ul id="advice-list" class="advice-list"></ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- 四、账户与总资产 -->
-    <section class="card" id="section-accounts">
-      <h2>四、账户与总资产</h2>
-      <p class="scope-note">账户余额纯手动维护，与账单不联动。</p>
-      <p class="total-assets">总资产：<strong id="total-assets">0.00 元</strong></p>
-      <form id="account-form" novalidate>
-        <div class="form-row">
-          <label for="acc-name">账户名称（≤10 字）</label>
-          <input type="text" id="acc-name" maxlength="10" placeholder="例如 微信 / 支付宝 / 现金" />
-        </div>
-        <div class="form-row">
-          <label for="acc-balance">余额（元）</label>
-          <input type="number" id="acc-balance" step="0.01" min="0" placeholder="例如 320" />
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">添加账户</button>
-        </div>
-        <p class="tip error" id="account-error" style="display:none;"></p>
-      </form>
-      <ul id="account-list" class="account-list"></ul>
-    </section>
-  </main>
+  <!-- 主容器：app.js 按登录态与角色整体渲染（登录注册 / 学生界面 / 家长引导页 / 家长只读视图）。
+       家长视图通过"不渲染"保证 DOM 中无任何写入口，而非 display:none 隐藏。 -->
+  <main id="app-main"></main>
 
   <footer class="site-footer">
-    <p>life-ledger · 双击 index.html 即可使用 · 数据存于浏览器 localStorage</p>
+    <p>life-ledger · 双击 index.html 即可使用 · 数据存于浏览器 localStorage / sessionStorage</p>
   </footer>
 
   <!-- 经典 script 按依赖顺序引入（file:// 直开，禁止 ES modules）：
-       Chart.js → stats（纯函数）→ store（存储）→ speech（语音）→ app（渲染入口） -->
+       Chart.js → stats（统计纯函数）→ store（唯一存储访问）→ speech（语音）
+       → auth（注册登录/哈希/邀请码/迁移决策）→ recommend（智能推荐）
+       → insights（AI 洞察，依赖 stats）→ app（渲染入口） -->
   <script src="lib/chart.js"></script>
   <script src="js/stats.js"></script>
   <script src="js/store.js"></script>
   <script src="js/speech.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/recommend.js"></script>
+  <script src="js/insights.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
