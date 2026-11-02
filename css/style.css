@@ -1,0 +1,312 @@
+/* style.css —— 简洁清晰优先（十节取舍表：界面好看让位于能跑） */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+  background: #f3f4f6;
+  color: #1f2937;
+  line-height: 1.6;
+}
+
+.site-header {
+  background: #1e3a8a;
+  color: #fff;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.site-header h1 {
+  font-size: 22px;
+}
+
+.site-sub {
+  font-size: 13px;
+  opacity: 0.85;
+  margin-top: 4px;
+}
+
+main {
+  max-width: 960px;
+  margin: 16px auto;
+  padding: 0 12px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  font-size: 18px;
+  border-left: 4px solid #1e3a8a;
+  padding-left: 8px;
+  margin-bottom: 12px;
+}
+
+.card h3 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.scope-note,
+.site-footer p {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.scope-note {
+  margin-bottom: 10px;
+}
+
+/* 表单 */
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.form-row label,
+.label-text {
+  width: 110px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.form-row input[type="text"],
+.form-row input[type="number"],
+.form-row input[type="date"],
+.form-row select {
+  flex: 1;
+  min-width: 180px;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.radio-label {
+  font-size: 14px;
+  margin-right: 12px;
+}
+
+.form-actions {
+  margin: 10px 0 6px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f9fafb;
+}
+
+.btn-primary {
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #1e40af;
+}
+
+/* 提示文案 */
+.tip {
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+.tip.error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.tip.info {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+/* 账单列表 */
+.list-total {
+  font-size: 13px;
+  color: #374151;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+}
+
+.bill-list,
+.account-list,
+.advice-list {
+  list-style: none;
+}
+
+.bill-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 4px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 14px;
+}
+
+.bill-date {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.bill-category {
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+.bill-tag {
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+.tag-rigid {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.tag-impulsive {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.bill-merchant {
+  font-weight: bold;
+}
+
+.bill-note {
+  color: #6b7280;
+  font-size: 13px;
+  flex: 1;
+}
+
+.bill-amount {
+  font-weight: bold;
+  color: #b91c1c;
+}
+
+.empty {
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 10px 4px;
+}
+
+/* 统计区 */
+.stats-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.stats-left,
+.stats-right {
+  flex: 1;
+  min-width: 280px;
+}
+
+.month-total {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.month-total strong {
+  color: #b91c1c;
+  font-size: 18px;
+}
+
+.pie-wrap {
+  max-width: 360px;
+}
+
+#pie-empty {
+  color: #9ca3af;
+}
+
+.advice-list li {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+/* 账户区 */
+.total-assets {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.total-assets strong {
+  color: #047857;
+  font-size: 20px;
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 4px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 14px;
+}
+
+.acc-name {
+  font-weight: bold;
+  min-width: 80px;
+}
+
+.acc-balance {
+  color: #047857;
+  font-weight: bold;
+  min-width: 90px;
+}
+
+.acc-balance-input {
+  width: 140px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.site-footer {
+  text-align: center;
+  padding: 12px;
+}
